@@ -46,6 +46,7 @@ def train():
     optimizer = torch.optim.SGD(net.parameters(), lr=0.001)
 
     # 使用数据 进行正向训练，并对Variable变量进行反向梯度传播  启动100次训练
+    plt.ion()
     for t in range(10000):
         # 使用全量数据 进行正向行走
         prediction = net(x)
@@ -58,7 +59,7 @@ def train():
         if t % 5 == 0:
             plt.cla()
             plt.scatter(x.data.numpy(), y.data.numpy())  # 绘制真是曲线
-            plt.plot(x.data.numpy(), prediction.data.numpy(), 'r-', lw=5)
+            plt.plot(x.data.numpy(), prediction.data.numpy(), 'r-', lw=1)
             plt.text(0.5, 0, 'Loss='+str(loss.item()),
                      fontdict={'size': 20, 'color': 'red'})
             plt.pause(0.1)
@@ -68,4 +69,5 @@ def train():
 
 
 if __name__ == '__main__':
+    # print('hello world')
     train()
