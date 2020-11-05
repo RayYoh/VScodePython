@@ -82,15 +82,27 @@ def CalRatMat(RPY_angle):
         R_T[3 * i + 2, 1] = math.sin(angle[i, 0]) * math.sin(angle[i, 1])
         R_T[3 * i + 2, 2] = math.cos(angle[i, 1])
     # print('R_T：\n', R_T)
+    R_1_1 = []
+    R_1_2 = []
     R_1_3 = []
+    R_2_1 = []
+    R_2_2 = []
     R_2_3 = []
+    R_3_1 = []
+    R_3_2 = []
     R_3_3 = []
 
     for i in range(row):
+        R_1_1.append(R_T[3 * i, 0])
+        R_1_2.append(R_T[3 * i, 1])
         R_1_3.append(R_T[3 * i, 2])
+        R_2_1.append(R_T[3 * i + 1, 0])
+        R_2_2.append(R_T[3 * i + 1, 1])
         R_2_3.append(R_T[3 * i + 1, 2])
+        R_3_1.append(R_T[3 * i + 2, 0])
+        R_3_2.append(R_T[3 * i + 2, 1])
         R_3_3.append(R_T[3 * i + 2, 2])
-    cal_R = np.mat([R_1_3, R_2_3, R_3_3])  # Splice R13,R23,R33 into a matrix
+    cal_R = np.mat([R_1_1, R_2_1, R_3_1, R_1_2, R_2_2, R_3_2,  R_1_3, R_2_3, R_3_3])  # Splice R13,R23,R33 into a matrix
     return R_T, cal_R
 
 
@@ -180,15 +192,15 @@ def train_Lin(vol_Force, cal_R, numTrain):
     row = vol_Force.shape[0]
     '''Fx,Fy,Fz'''
     for i in range(3):
-        x_1 = cal_R[i, 0:numTrain].reshape(-1, 1)
+        x_1 = cal_R[6:, 0:numTrain]
         I = np.mat([1 for _ in range(numTrain)]).reshape(-1, 1)
-        x = np.hstack((x_1, I))
+        x = np.hstack((np.transpose(x_1), I))
         y = vol_Force[0:numTrain, i]
         h = (np.transpose(x) * x).I * np.transpose(x) * y.reshape(-1, 1)
 
-        x_test_1 = cal_R[i, numTrain:row].reshape(-1, 1)
+        x_test_1 = cal_R[6:, numTrain:row]
         I = np.mat([1 for _ in range(numTrain, row)]).reshape(-1, 1)
-        x_test = np.hstack((x_test_1, I))
+        x_test = np.hstack((np.transpose(x_test_1), I))
         y_test = vol_Force[numTrain:row, i]
         F_error = y_test - np.dot(x_test, h)
         length=len(list(F_error))
@@ -197,7 +209,7 @@ def train_Lin(vol_Force, cal_R, numTrain):
             #       h[1, 0])
             # print('Fx error= \n', F_error)
             plt.scatter([i for i in range(length)],list(F_error))
-            plt.ylim(-10,10)
+            # plt.ylim(-10,10)
             plt.title('Linear Fx_error')
             plt.show()
         elif 1 == i:
@@ -205,7 +217,7 @@ def train_Lin(vol_Force, cal_R, numTrain):
             #       h[1, 0])
             # print('Fy error= \n', F_error)
             plt.scatter([i for i in range(length)], list(F_error))
-            plt.ylim(-10, 10)
+            # plt.ylim(-10, 10)
             plt.title('Linear Fy_error')
             plt.show()
         else:
@@ -213,7 +225,7 @@ def train_Lin(vol_Force, cal_R, numTrain):
             #       h[1, 0])
             # print('Fz error= \n', F_error)
             plt.scatter([i for i in range(length)], list(F_error))
-            plt.ylim(-10, 10)
+            # plt.ylim(-10, 10)
             plt.title('Linear Fz_error')
             plt.show()
 
@@ -291,7 +303,9 @@ class Net(torch.nn.Module):
         super(Net, self).__init__()
         self.hidden = torch.nn.Linear(n_feature, n_hidden)
         self.hidden1 = torch.nn.Linear(n_hidden, 500)
-        self.hidden2 = torch.nn.Linear(500, 100)
+        self.hidden2 = torch.nn.Linear(500, 1000)
+        self.hidden3 = torch.nn.Linear(1000, 2000)
+        self.hidden4 = torch.nn.Linear(2000, 100)
         self.predict = torch.nn.Linear(n_hidden, n_output)
 
     def forward(self, x):
@@ -299,18 +313,25 @@ class Net(torch.nn.Module):
         x = F.relu(self.hidden(x))
         x = F.relu(self.hidden1(x))
         x = F.relu(self.hidden2(x))
+        x = F.relu(self.hidden3(x))
+        x = F.relu(self.hidden4(x)) 
         x = self.predict(x)
         return x
 
 def trainByPytorch(vol_Force, cal_R):
     print('------      构建数据集      ------')
-    vol_Force_T_i = np.transpose(vol_Force).tolist()[4]
+    vol_Force_T_i = np.transpose(vol_Force).tolist()
     cal_R_i = cal_R.tolist()
-    x1 = torch.unsqueeze(torch.tensor(cal_R_i[0]), dim=1)
-    x2 = torch.unsqueeze(torch.tensor(cal_R_i[1]), dim=1)
-    x3 = torch.unsqueeze(torch.tensor(cal_R_i[2]), dim=1)
-    x = torch.cat((x1, x2, x3), 1)
-    y = torch.unsqueeze(torch.tensor(vol_Force_T_i), dim=1)
+    x = torch.unsqueeze(torch.tensor(cal_R_i[0]), dim=1)
+    for i in range(1, 9):
+        x_temp = torch.unsqueeze(torch.tensor(cal_R_i[i]), dim=1)
+        x = torch.cat((x, x_temp), 1)
+
+    y = torch.unsqueeze(torch.tensor(vol_Force_T_i[0]), dim=1)
+    for i in range(1,6):
+        y_temp = torch.unsqueeze(torch.tensor(vol_Force_T_i[i]),dim=1)
+        y = torch.cat((y,y_temp),1)
+
     x, y = Variable(x), Variable(y)
 
     x = x.to(device)
@@ -319,7 +340,7 @@ def trainByPytorch(vol_Force, cal_R):
 
     print('------      搭建网络      ------')
     # 使用固定的方式继承并重写 init和forword两个类
-    net = Net(n_feature=3, n_hidden=100, n_output=1)
+    net = Net(n_feature=9, n_hidden=100, n_output=6)
 
     print('网络结构为：', net)
 
@@ -371,36 +392,51 @@ def trainByPytorch(vol_Force, cal_R):
             if(loss.item()<30.58):
                 torch.save(net.state_dict(), '.\Mx.pth')
         '''
-        if t%10 == 0:
-            print(loss.item())
+        if t % 10 == 0:
+            print('Loss = ', loss.item())
             if (loss.item() < 2.91):
-                torch.save(net.state_dict(), '.\My2.pth')
+                torch.save(net.state_dict(), './all.pth')
     # plt.ioff()
     # plt.show()
     print('------      预测和可视化      ------')
 
 def predict(path,vol_Force, cal_R):
 
-    net2 = Net(n_feature=3, n_hidden=100, n_output=1)
+    net2 = Net(n_feature=9, n_hidden=100, n_output=6)
     net2.load_state_dict(torch.load(path))
     net2 = net2.to(device)
-    vol_Force_T_i = np.transpose(vol_Force).tolist()[4]
+    vol_Force_T_i = np.transpose(vol_Force).tolist()
     cal_R_i = cal_R.tolist()
-    x1 = torch.unsqueeze(torch.tensor(cal_R_i[0]), dim=1)
-    x2 = torch.unsqueeze(torch.tensor(cal_R_i[1]), dim=1)
-    x3 = torch.unsqueeze(torch.tensor(cal_R_i[2]), dim=1)
-    x = torch.cat((x1, x2, x3), 1)
-    y = torch.unsqueeze(torch.tensor(vol_Force_T_i), dim=1)
+    x = torch.unsqueeze(torch.tensor(cal_R_i[0]), dim=1)
+    for i in range(1, 9):
+        x_temp = torch.unsqueeze(torch.tensor(cal_R_i[i]), dim=1)
+        x = torch.cat((x, x_temp), 1)
+
+    y = torch.unsqueeze(torch.tensor(vol_Force_T_i[0]), dim=1)
+    for i in range(1,6):
+        y_temp = torch.unsqueeze(torch.tensor(vol_Force_T_i[i]), dim=1)
+        y = torch.cat((y, y_temp), 1)
+
     x, y = Variable(x), Variable(y)
     x = x.to(device)
     y = y.to(device)
     prediction = net2(x)
-    error=prediction-y
-    plt.scatter([i for i in range(len(error.data.cpu().numpy()))],error.data.cpu().numpy())
-    # plt.ylim(-10,10)
-    plt.title('My_error')
+    error = prediction-y
+    error_abs = map(abs, error.data.cpu().numpy())
+    total_error = sum(error_abs)
+    print('total_error: ', total_error)
+    print('avg_error: ', total_error/len(vol_Force_T_i[0]))
+    '''
+    plt.scatter([i for i in range(len(error.data.cpu().numpy()[:, 0]))], error.data.cpu().numpy()[:, 0])
+    plt.title('Fx_error')
     plt.show()
-
+    plt.scatter([i for i in range(len(error.data.cpu().numpy()[:, 1]))], error.data.cpu().numpy()[:, 1])
+    plt.title('Fy_error')
+    plt.show()
+    plt.scatter([i for i in range(len(error.data.cpu().numpy()[:, 2]))], error.data.cpu().numpy()[:, 2])
+    plt.title('Fz_error')
+    plt.show()
+    '''
 
 if __name__ == '__main__':
     data_path = r'D:\1A.研究生\科研\基于力的位姿计算\不同姿态下的传感器输出值.xlsx'  # xls dir
@@ -415,7 +451,6 @@ if __name__ == '__main__':
 
 
     trainByPytorch(vol_Force[0:15000,:], cal_R[:,0:15000])
-    # predict("My2.pth", vol_Force,cal_R)
+    # predict("all.pth", vol_Force, cal_R)
 
     # train_Lin(vol_Force, cal_R, 15000)
-
