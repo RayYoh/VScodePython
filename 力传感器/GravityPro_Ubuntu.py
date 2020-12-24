@@ -459,6 +459,8 @@ if __name__ == '__main__':
     data_path = r'D:\1A.研究生\科研\基于力的位姿计算\不同姿态下的传感器输出值.xlsx'  # xls dir
     vol_Force, RPY_angle = readData(data_path)
     R_T, cal_R = CalRatMat(RPY_angle)
+    print(vol_Force.shape)
+    print(cal_R.shape)
 
     # plt.scatter(list(cal_R[0,:]),list(vol_Force[:,0]))
     # plt.xlabel('R13')
@@ -470,10 +472,10 @@ if __name__ == '__main__':
     # plt.show()
 
 
-    # trainByPytorch(vol_Force[0:15000,:], cal_R[:,0:15000])
+    trainByPytorch(vol_Force[0:15000,:], cal_R[:,0:15000])
     # predict("3in6out_shuffle.pth", vol_Force, cal_R)
 
     # trainByPytorch(vol_Force[0:15000, :], RPY_angle[0:15000, :])
-    predict("3in6out_noshuffle.pth", vol_Force, RPY_angle)
+    # predict("3in6out_noshuffle.pth", vol_Force, RPY_angle)
 
     # train_Lin(vol_Force, cal_R, 15000)

@@ -5,12 +5,14 @@ import matplotlib.pyplot as plt
 import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
+import util
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-"""Read experimental data"""
 
 
+""" Read experimental data """
+# For UR robot
 def readData(path):
     '''Read experimental data.
 
@@ -24,27 +26,42 @@ def readData(path):
     data = xlrd.open_workbook(path)  # read excel
     Sheet = data.sheet_by_index(0)  # read sheet
     Sheet_rows = Sheet.nrows  # read row
-    vol_list = []
+    volList = []
     for i in range(0, Sheet_rows):
         dataLine = Sheet.row_values(i)
-        traForce = [f for f in dataLine[15:21]]
-        conForce = [f for f in dataLine[35:41]]
-        angle_list = [float(a) for a in data_str[19:22]]
-        # RPY_angle.append(angle_list)  # read attitude angle
-        vol_list.append(force_list + angle_list)
-    vol = np.mat(vol_list)
-    np.random.shuffle(vol)
-    vol_Force = vol[:, :6]
-    RPY_angle = vol[:, 6:]
-    RPY_angle = RPY_angle * math.pi / 180  # 。to rad
+        rawTraForce = [f for f in dataLine[15:21]]
+        rawConForce = [f for f in dataLine[35:41]]
+        rawTCPPos = [f for f in dataLine[42:48]]
+        rawRPY = util.rv2rpy(rawTCPPos[3], rawTCPPos[4], rawTCPPos[5])  # Rotation Vector 2 RPY
+        volList.append(rawTraForce+rawConForce+rawTCPPos+list(rawRPY))
+    vol = np.mat(volList)
+    # np.random.shuffle(vol)
+    traForce = vol[:, :6]
+    conForce = vol[:, 6:12]
+    TCPRv = vol[:, 15:18]
+    RPYangle = vol[:, 18:]
 
-    return vol_Force, RPY_angle
+    return traForce, conForce,TCPRv, RPYangle
+
+def RPY2RM(RPYangle):
+    '''Calculate rotation matrix from RPY angle
+    Args:
+        RPYangle: RPY angle  type；matrix
+
+    Return:
+        RM: Rotation Matrix type:array
+    '''
+    row = np.shape(RPYangle)[0]
+    RM = []
+    for i in range(row):
+        RM.append(util.rpy2rm(RPYangle[i].A[0]))  # Change matrix to array, and take the first element.
+    RM = np.array(RM)
+    return  RM
 
 
 """Calculate the transpose rotation matrix"""
-
-
 def CalRatMat(RPY_angle):
+    # For PUMA Robot
     '''Calculate the transpose rotation matrix
 
     Args:
@@ -120,7 +137,7 @@ def train_Qua(vol_Force, cal_R, numTrain):
         F_error = y1_test - np.dot(x_test, h1)
         y2_test = vol_Force[numTrain:row, i + 3]
         M_error = y2_test - np.dot(x_test, h2)
-        length=len(list(F_error))
+        length = len(list(F_error))
         if 0 == i:
             print('Fx = ', h1[0, 0], ' * R13^2 + ',
                   h1[1, 0], ' * R13 + ', h1[2, 0])
@@ -187,13 +204,13 @@ def train_Lin(vol_Force, cal_R, numTrain):
         x_test = np.hstack((x_test_1, I))
         y_test = vol_Force[numTrain:row, i]
         F_error = y_test - np.dot(x_test, h)
-        length=len(list(F_error))
+        length = len(list(F_error))
         if 0 == i:
             # print('Fx = ', h[0, 0], ' * R13 + ',
             #       h[1, 0])
             # print('Fx error= \n', F_error)
-            plt.scatter([i for i in range(length)],list(F_error))
-            plt.ylim(-10,10)
+            plt.scatter([i for i in range(length)], list(F_error))
+            plt.ylim(-10, 10)
             plt.title('Linear Fx_error')
             plt.show()
         elif 1 == i:
@@ -298,24 +315,30 @@ class Net(torch.nn.Module):
         x = self.predict(x)
         return x
 
-def trainByPytorch(vol_Force, cal_R):
+
+def trainByPytorch(conForce, TCPRv):
     print('------      构建数据集      ------')
-    vol_Force_T_i = np.transpose(vol_Force).tolist()[4]
-    cal_R_i = cal_R.tolist()
-    x1 = torch.unsqueeze(torch.tensor(cal_R_i[0]), dim=1)
-    x2 = torch.unsqueeze(torch.tensor(cal_R_i[1]), dim=1)
-    x3 = torch.unsqueeze(torch.tensor(cal_R_i[2]), dim=1)
-    x = torch.cat((x1, x2, x3), 1)
-    y = torch.unsqueeze(torch.tensor(vol_Force_T_i), dim=1)
+    conForceList = np.transpose(conForce).tolist()
+    TCPRvList = np.transpose(TCPRv).tolist()
+
+    x = torch.unsqueeze(torch.tensor(TCPRvList[0]), dim=1)
+    for i in range(1, 3):
+        x_temp = torch.unsqueeze(torch.tensor(TCPRvList[i]), dim=1)
+        x = torch.cat((x, x_temp), 1)
+
+    y = torch.unsqueeze(torch.tensor(conForceList[0]), dim=1)
+    for i in range(1, 6):
+        y_temp = torch.unsqueeze(torch.tensor(conForceList[i]), dim=1)
+        y = torch.cat((y, y_temp), 1)
+
     x, y = Variable(x), Variable(y)
 
     x = x.to(device)
     y = y.to(device)
 
-
     print('------      搭建网络      ------')
     # 使用固定的方式继承并重写 init和forword两个类
-    net = Net(n_feature=3, n_hidden=100, n_output=1)
+    net = Net(n_feature=3, n_hidden=100, n_output=6)
 
     print('网络结构为：', net)
 
@@ -367,51 +390,57 @@ def trainByPytorch(vol_Force, cal_R):
             if(loss.item()<30.58):
                 torch.save(net.state_dict(), '.\Mx.pth')
         '''
-        if t%10 == 0:
+        if t % 10 == 0:
             print(loss.item())
             if (loss.item() < 2.91):
-                torch.save(net.state_dict(), '.\My2.pth')
+                torch.save(net.state_dict(), '.\RPY2Force.pth')
     # plt.ioff()
     # plt.show()
     print('------      预测和可视化      ------')
 
-def predict(path,vol_Force, cal_R):
 
-    net2 = Net(n_feature=3, n_hidden=100, n_output=1)
+def predict(path, conForce, TCPRv):
+
+    net2 = Net(n_feature=3, n_hidden=100, n_output=6)
     net2.load_state_dict(torch.load(path))
     net2 = net2.to(device)
-    vol_Force_T_i = np.transpose(vol_Force).tolist()[4]
-    cal_R_i = cal_R.tolist()
-    x1 = torch.unsqueeze(torch.tensor(cal_R_i[0]), dim=1)
-    x2 = torch.unsqueeze(torch.tensor(cal_R_i[1]), dim=1)
-    x3 = torch.unsqueeze(torch.tensor(cal_R_i[2]), dim=1)
-    x = torch.cat((x1, x2, x3), 1)
-    y = torch.unsqueeze(torch.tensor(vol_Force_T_i), dim=1)
+    conForceList = np.transpose(conForce).tolist()
+    TCPRvList = np.transpose(TCPRv).tolist()
+    x = torch.unsqueeze(torch.tensor(TCPRvList[0]), dim=1)
+    for i in range(1, 3):
+        x_temp = torch.unsqueeze(torch.tensor(TCPRvList[i]), dim=1)
+        x = torch.cat((x, x_temp), 1)
+
+    y = torch.unsqueeze(torch.tensor(conForceList[0]), dim=1)
+    for i in range(1, 6):
+        y_temp = torch.unsqueeze(torch.tensor(conForceList[i]), dim=1)
+        y = torch.cat((y, y_temp), 1)
+
     x, y = Variable(x), Variable(y)
     x = x.to(device)
     y = y.to(device)
     prediction = net2(x)
-    error=prediction-y
-    plt.scatter([i for i in range(len(error.data.cpu().numpy()))],error.data.cpu().numpy())
+    error = prediction-y
+    # print(error.data.cpu().numpy()[:,0])
+    plt.scatter([i for i in range(len(error.data.cpu().numpy()))],
+                error.data.cpu().numpy()[:,5])
     # plt.ylim(-10,10)
-    plt.title('My_error')
+    plt.title('ForceError')
     plt.show()
 
 
+
 if __name__ == '__main__':
-    data_path = r'D:\1A.研究生\科研\基于力的位姿计算\不同姿态下的传感器输出值.xlsx'  # xls dir
-    vol_Force, RPY_angle = readData(data_path)
-    R_T, cal_R = CalRatMat(RPY_angle)
+    data_path = r'D:\VScode\VScodePython\DataBasedUR\Data\allData.xls'  # xls dir
+    traForce, conForce, TCPRv, RPYangle = readData(data_path) # Use the m & rad
+    RM = RPY2RM(RPYangle)
 
     # plt.scatter(list(cal_R[0,:]),list(vol_Force[:,0]))
     # plt.xlabel('R13')
     # plt.ylabel('Fx')
     # plt.show()
 
-
-
-    trainByPytorch(vol_Force[0:15000,:], cal_R[:,0:15000])
-    # predict("My2.pth", vol_Force,cal_R)
+    # trainByPytorch(conForce,RPYangle)
+    predict("RPY2Force.pth", conForce, RPYangle)
 
     # train_Lin(vol_Force, cal_R, 15000)
-

@@ -1,5 +1,4 @@
 import os
-import xlrd
 import xlwt
 import numpy as np
 

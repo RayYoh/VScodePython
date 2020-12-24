@@ -12,21 +12,18 @@
 # print(np.max(x_abs_ls,axis=0))
 # print(np.sum(x_abs_ls,axis=0))
 
-import rtde_control
-import rtde_receive
-import time
-import util
+# import rtde_control
+# import rtde_receive
+# import time
+# import util
+#
+# rtde_r = rtde_receive.RTDEReceiveInterface("192.168.218.2")
+# actual_q = rtde_r.getActualQ()
+# actual_pos = rtde_r.getActualTCPPose()
+# print(actual_pos)
+# actualPosRPY = util.rv2rpy(actual_pos[3],actual_pos[4],actual_pos[5])
+# print(type(actualPosRPY))
 
-rtde_r = rtde_receive.RTDEReceiveInterface("192.168.218.2")
-actual_q = rtde_r.getActualQ()
-actual_pos = rtde_r.getActualTCPPose()
-print(actual_pos)
-actualPosRPY = util.rv2rpy(actual_pos[3],actual_pos[4],actual_pos[5])
-print(actualPosRPY)
-R1 = util.rv2rm(actual_pos[3],actual_pos[4],actual_pos[5])
-R2 = util.rpy2rm(actualPosRPY)
-print(R1)
-print(R2)
 # rtde_c = rtde_control.RTDEControlInterface("192.168.218.2")
 # rtde_r = rtde_receive.RTDEReceiveInterface("192.168.218.2")
 # init_q = rtde_r.getActualQ()
@@ -65,3 +62,7 @@ print(R2)
 # import numpy as np
 # n = np.zeros(48)
 # print(type(n))
+import  numpy as np
+a = np.mat(([1,2,3],[4,5,6]))
+b = np.transpose(a).tolist()
+print(b)
