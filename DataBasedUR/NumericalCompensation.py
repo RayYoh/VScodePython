@@ -423,7 +423,7 @@ def predict(path, conForce, TCPRv):
     error = prediction-y
     # print(error.data.cpu().numpy()[:,0])
     plt.scatter([i for i in range(len(error.data.cpu().numpy()))],
-                error.data.cpu().numpy()[:,5])
+                error.data.cpu().numpy()[:,4])
     # plt.ylim(-10,10)
     plt.title('ForceError')
     plt.show()
