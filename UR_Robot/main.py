@@ -6,7 +6,7 @@ import struct
 # import math
 # import time
 # import numpy as np
-HOST = "192.168.218.128"
+HOST = "192.168.218.2"
 PORT = 30003
 
 dic = {'MessageSize': 'i',

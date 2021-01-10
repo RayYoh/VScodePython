@@ -48,7 +48,7 @@ def readData(path):
 """Calculate the transpose rotation matrix"""
 
 
-def CalRatMat(RPY_angle):
+def   CalRatMat(RPY_angle):
     '''Calculate the transpose rotation matrix
 
     Args:

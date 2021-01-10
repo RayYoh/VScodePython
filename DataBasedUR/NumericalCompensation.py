@@ -6,6 +6,7 @@ import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
 import util
+from sklearn import preprocessing
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -57,6 +58,14 @@ def RPY2RM(RPYangle):
         RM.append(util.rpy2rm(RPYangle[i].A[0]))  # Change matrix to array, and take the first element.
     RM = np.array(RM)
     return  RM
+
+def RV2RM(TCPRv):
+    row = np.shape(TCPRv)[0]
+    RM = []
+    for i in range(row):
+        RM.append(util.rv2rm(TCPRv[i,0],TCPRv[i,1],TCPRv[i,2]))
+    RM = np.array(RM)
+    return RM
 
 
 """Calculate the transpose rotation matrix"""
@@ -302,16 +311,24 @@ class Net(torch.nn.Module):
     def __init__(self, n_feature, n_hidden, n_output):
         # 初始网络的内部结构
         super(Net, self).__init__()
-        self.hidden = torch.nn.Linear(n_feature, n_hidden)
-        self.hidden1 = torch.nn.Linear(n_hidden, 500)
-        self.hidden2 = torch.nn.Linear(500, 100)
-        self.predict = torch.nn.Linear(n_hidden, n_output)
+        self.hidden = torch.nn.Linear(n_feature, 96)
+        self.hidden1 = torch.nn.Linear(96, 192)
+        self.hidden2 = torch.nn.Linear(192, 384)
+        self.hidden3 = torch.nn.Linear(384, 768)
+        self.hidden4 = torch.nn.Linear(768, 384)
+        self.hidden5 = torch.nn.Linear(384, 192)
+        self.hidden6 = torch.nn.Linear(192, 96)
+        self.predict = torch.nn.Linear(96, n_output)
 
     def forward(self, x):
         # 一次正向行走过程
-        x = F.relu(self.hidden(x))
-        x = F.relu(self.hidden1(x))
-        x = F.relu(self.hidden2(x))
+        x = F.leaky_relu(self.hidden(x))
+        x = F.leaky_relu(self.hidden1(x))
+        x = F.leaky_relu(self.hidden2(x))
+        x = F.leaky_relu(self.hidden3(x))
+        x = F.leaky_relu(self.hidden4(x))
+        x = F.leaky_relu(self.hidden5(x))
+        x = F.leaky_relu(self.hidden6(x))
         x = self.predict(x)
         return x
 
@@ -344,14 +361,16 @@ def trainByPytorch(conForce, TCPRv):
 
     print('------      启动训练      ------')
     loss_func = F.mse_loss
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
+    # optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
     net = net.to(device)
     # 使用数据 进行正向训练，并对Variable变量进行反向梯度传播  启动100次训练
-    for t in range(5000):
-        # if t < 5000:
-        #     optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
-        # else:
-        #     optimizer = torch.optim.Adam(net.parameters(), lr=0.0005)
+    for t in range(50000):
+        if t < 8000:
+            optimizer = torch.optim.Adam(net.parameters(), lr=0.001,weight_decay=0.001)
+        elif t < 15000:
+            optimizer = torch.optim.Adam(net.parameters(), lr=0.0005,weight_decay=0.001)
+        else:
+            optimizer = torch.optim.Adam(net.parameters(), lr=0.0001,weight_decay=0.001)
         # 使用全量数据 进行正向行走
 
         prediction = net(x)
@@ -391,13 +410,46 @@ def trainByPytorch(conForce, TCPRv):
                 torch.save(net.state_dict(), '.\Mx.pth')
         '''
         if t % 10 == 0:
-            print(loss.item())
-            if (loss.item() < 2.91):
-                torch.save(net.state_dict(), '.\RPY2Force.pth')
-    # plt.ioff()
-    # plt.show()
+            print(t,':',loss.item())
+            if (loss.item() < 0.46):
+                torch.save(net.state_dict(), r'.\4200组3Loss0.46.pth')
     print('------      预测和可视化      ------')
 
+
+def predictError(path, conForce, TCPRv):
+
+    net2 = Net(n_feature=3, n_hidden=100, n_output=6)
+    net2.load_state_dict(torch.load(path))
+    net2 = net2.to(device)
+    conForceList = np.transpose(conForce).tolist()
+    TCPRvList = np.transpose(TCPRv).tolist()
+    x = torch.unsqueeze(torch.tensor(TCPRvList[0]), dim=1)
+    for i in range(1, 3):
+        x_temp = torch.unsqueeze(torch.tensor(TCPRvList[i]), dim=1)
+        x = torch.cat((x, x_temp), 1)
+
+    y = torch.unsqueeze(torch.tensor(conForceList[0]), dim=1)
+    for i in range(1, 6):
+        y_temp = torch.unsqueeze(torch.tensor(conForceList[i]), dim=1)
+        y = torch.cat((y, y_temp), 1)
+
+    x, y = Variable(x), Variable(y)
+    x = x.to(device)
+    y = y.to(device)
+    prediction = net2(x)
+    error = prediction-y
+    error = error.data.cpu().numpy()
+    error = abs(error)
+    errorPlt = error[:,5]
+    errorMax = np.max(errorPlt)
+    errorMean = np.mean(errorPlt)
+    errorStd = np.std(errorPlt)
+    print('Max: ',errorMax)
+    print('Mean: ',errorMean)
+    print('Std: ',errorStd)
+    plt.scatter([i for i in range(len(error))],errorPlt)
+    plt.title('ForceError')
+    plt.show()
 
 def predict(path, conForce, TCPRv):
 
@@ -421,26 +473,38 @@ def predict(path, conForce, TCPRv):
     y = y.to(device)
     prediction = net2(x)
     error = prediction-y
-    # print(error.data.cpu().numpy()[:,0])
-    plt.scatter([i for i in range(len(error.data.cpu().numpy()))],
-                error.data.cpu().numpy()[:,4])
-    # plt.ylim(-10,10)
-    plt.title('ForceError')
-    plt.show()
+    print(prediction.data.cpu().numpy()[0])
+    print(error.data.cpu().numpy()[0])
+
+def normalization(X):
+    scaler = preprocessing.StandardScaler().fit(X)
+    return sc
+
 
 
 
 if __name__ == '__main__':
-    data_path = r'D:\VScode\VScodePython\DataBasedUR\Data\allData.xls'  # xls dir
+    data_path = r'D:\VScode\VScodePython\DataBasedUR\20201229\allData.xls'  # xls dir
     traForce, conForce, TCPRv, RPYangle = readData(data_path) # Use the m & rad
-    RM = RPY2RM(RPYangle)
 
-    # plt.scatter(list(cal_R[0,:]),list(vol_Force[:,0]))
-    # plt.xlabel('R13')
-    # plt.ylabel('Fx')
+    TCPRvMean , TCPRvStd = normalization(TCPRv)
+    print(TCPRvMean)
+
+    # plt.scatter([i for i in range(conForce.shape[0])],list(conForce[:,0]))
+    # plt.title('Force')
     # plt.show()
 
-    # trainByPytorch(conForce,RPYangle)
-    predict("RPY2Force.pth", conForce, RPYangle)
 
-    # train_Lin(vol_Force, cal_R, 15000)
+    # RM = RV2RM(TCPRv)
+    # RM13 = []
+    # for i in range(conForce.shape[0]):
+    #     RM13.append(RM[i,2,2])
+    # plt.plot([i for i in range(conForce.shape[0])],RM13,color = 'red')
+    # plt.show()
+
+    # trainByPytorch(conForce[0:4200],TCPRv[0:4200])
+    # predictError("4200组3Loss0.116.pth", conForce[:4200], TCPRv[:4200])
+    # predictError("4200组3Loss0.116.pth", conForce[4200:], TCPRv[4200:])
+
+    # index = 4073
+    # predict('Rv2ForcePro.pth',conForce[index],TCPRv[index])
