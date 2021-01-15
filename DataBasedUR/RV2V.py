@@ -270,18 +270,18 @@ class Net(torch.nn.Module):
         super(Net, self).__init__()
         self.hidden = torch.nn.Linear(n_feature, 45)
         self.hidden1 = torch.nn.Linear(45, 90)
-        # self.hidden2 = torch.nn.Linear(90, 135)
-        # self.hidden3 = torch.nn.Linear(135, 90)
+        self.hidden2 = torch.nn.Linear(90, 135)
+        self.hidden3 = torch.nn.Linear(135, 90)
         self.hidden4 = torch.nn.Linear(90, 45)
         self.predict = torch.nn.Linear(45, n_output)
 
     def forward(self, x):
         # 一次正向行走过程
-        x = F.relu(self.hidden(x))
-        x = F.relu(self.hidden1(x))
-        # x = F.leaky_relu(self.hidden2(x))
-        # x = F.leaky_relu(self.hidden3(x))
-        x = F.relu(self.hidden4(x))
+        x = F.leaky_relu(self.hidden(x))
+        x = F.leaky_relu(self.hidden1(x))
+        x = F.leaky_relu(self.hidden2(x))
+        x = F.leaky_relu(self.hidden3(x))
+        x = F.leaky_relu(self.hidden4(x))
         x = self.predict(x)
         return x
 
@@ -463,22 +463,22 @@ if __name__ == '__main__':
     '''画出原始数据'''
     # plt.figure(1)
     # plt.subplot(2, 3, 1)
-    # plt.plot(conForce[:, 0], color='g', label='Fx')
+    # plt.plot(V[:, 0], color='g', label='Fx')
     # plt.figure(1)
     # plt.subplot(2, 3, 2)
-    # plt.plot(conForce[:, 1], color='r', label='Fy')
+    # plt.plot(V[:, 1], color='r', label='Fy')
     # plt.figure(1)
     # plt.subplot(2, 3, 3)
-    # plt.plot(conForce[:, 2], color='y', label='Fz')
+    # plt.plot(V[:, 2], color='y', label='Fz')
     # plt.figure(1)
     # plt.subplot(2, 3, 4)
-    # plt.plot(conForce[:, 3], color='b', label='Mx')
+    # plt.plot(V[:, 3], color='b', label='Mx')
     # plt.figure(1)
     # plt.subplot(2, 3, 5)
-    # plt.plot(conForce[:, 4], color='c', label='My')
+    # plt.plot(V[:, 4], color='c', label='My')
     # plt.figure(1)
     # plt.subplot(2, 3, 6)
-    # plt.plot(conForce[:, 5], color='m', label='Mz')
+    # plt.plot(V[:, 5], color='m', label='Mz')
     # plt.show()
 
     '''计算旋转矩阵，并取其转置的最后一列'''
@@ -509,4 +509,4 @@ if __name__ == '__main__':
     input = np.array(input)
     '''训练'''
     # trainByPytorch(scalerV ,input) #改写输入为旋转矩阵的最后一列
-    predictError("两层9800组矩阵到电压.pth", VTest , input,scaler)
+    predictError("四层9800组矩阵到电压.pth", VTest , input,scaler)

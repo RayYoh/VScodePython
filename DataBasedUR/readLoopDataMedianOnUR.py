@@ -5,7 +5,7 @@ import util
 import numpy as np
 
 def read():
-    dataDir = r'D:\VScode\VScodePython\DataBasedUR\20210106'
+    dataDir = r'D:\VScode\VScodePython\DataBasedUR\20210114\吸盘'
     saveDir = dataDir + r"\allDataMedian.xls"
 
     dataList = os.listdir(dataDir)
@@ -113,4 +113,4 @@ def saveGroup():
     print("Finish Test Data!")
 
 if __name__ == '__main__':
-    saveGroup()
+    read()

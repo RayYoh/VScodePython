@@ -341,11 +341,11 @@ class Net(torch.nn.Module):
 
     def forward(self, x):
         # 一次正向行走过程
-        x = F.relu(self.hidden(x))
-        x = F.relu(self.hidden1(x))
+        x = F.leaky_relu(self.hidden(x))
+        x = F.leaky_relu(self.hidden1(x))
         x = F.relu(self.hidden2(x))
         x = F.relu(self.hidden3(x))
-        x = F.relu(self.hidden4(x))
+        x = F.leaky_relu(self.hidden4(x))
         x = self.predict(x)
         return x
 
@@ -431,7 +431,7 @@ def trainByPytorch(conForce, TCPRv):
         if t % 10 == 0:
             print(t,':',loss.item())
             if (loss.item() < 1.14):
-                torch.save(net.state_dict(), r'.\四层ReLU9800组矩阵到力值.pth')
+                torch.save(net.state_dict(), r'.\两层9800组45个节点矩阵到力值.pth')
     print('------      预测和可视化      ------')
 
 '''
@@ -533,30 +533,19 @@ def predictError(path, conForce, TCPRv):
     plt.ylabel('error/Ncm')
     plt.show()
 
-def predict(path, conForce, TCPRv):
-
-    net2 = Net(n_feature=3, n_hidden=100, n_output=6)
+def predict(path,TCPRv):
+    net2 = Net(n_feature=9, n_hidden=100, n_output=5)
     net2.load_state_dict(torch.load(path))
     net2 = net2.to(device)
-    conForceList = np.transpose(conForce).tolist()
     TCPRvList = np.transpose(TCPRv).tolist()
     x = torch.unsqueeze(torch.tensor(TCPRvList[0]), dim=1)
-    for i in range(1, 3):
+    for i in range(1, 9):
         x_temp = torch.unsqueeze(torch.tensor(TCPRvList[i]), dim=1)
         x = torch.cat((x, x_temp), 1)
-
-    y = torch.unsqueeze(torch.tensor(conForceList[0]), dim=1)
-    for i in range(1, 6):
-        y_temp = torch.unsqueeze(torch.tensor(conForceList[i]), dim=1)
-        y = torch.cat((y, y_temp), 1)
-
-    x, y = Variable(x), Variable(y)
+    x= Variable(x)
     x = x.to(device)
-    y = y.to(device)
     prediction = net2(x)
-    error = prediction-y
-    print(prediction.data.cpu().numpy()[0])
-    print(error.data.cpu().numpy()[0])
+    print(prediction.data.cpu().numpy())
 
 def normalization(X):
     scaler = preprocessing.StandardScaler().fit(X)
@@ -565,13 +554,14 @@ def normalization(X):
 
 
 if __name__ == '__main__':
-    trainPath = r'D:\VScode\VScodePython\DataBasedUR\20210106\allDataMedian.xls'
-    # trainPath = r'D:\VScode\VScodePython\DataBasedUR\20210106\train.xls'  # xls dir
+    # trainPath = r'D:\VScode\VScodePython\DataBasedUR\20210106\allDataMedian.xls'
+    trainPath = r'D:\VScode\VScodePython\DataBasedUR\20210106\train.xls'  # xls dir
     testPath = r'D:\VScode\VScodePython\DataBasedUR\20210106\test.xls'
     # conForce, TCPRv, RPYangle = readData(trainPath) # Use the m & rad
     conForce, TCPRv, RPYangle = readData(testPath)
     # traForce, conForce, TCPRv, RPYangle = readDataAll(trainPath)
-
+    # TCPRv = np.mat([[0.183716,1.52171,-0.520186],[1.15273,-0.136958,-0.4721565],[-2.48993,0.0906004,-0.90898],
+    #                 [-1.62383,-1.60848,0.938058],[2.61315,0.0570654,0.899956],[-1.30342,-0.344358,1.8533]])
     '''画出原始数据'''
     # plt.figure(1)
     # plt.subplot(2, 3, 1)
@@ -622,4 +612,4 @@ if __name__ == '__main__':
     '''训练'''
     # trainByPytorch(conForce,input) #改写输入为旋转矩阵的最后一列
     predictError("四层ReLU9800组矩阵到力值.pth", conForce, input)
-    # predictError("4200组矩阵到力值.pth", conForce[4200:], input[4200:])
+    # predict("两层9800组矩阵到力值.pth", input)
